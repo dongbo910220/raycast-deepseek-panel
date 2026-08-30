@@ -2,9 +2,9 @@
 
 ## Reporting a vulnerability
 
-Please report security issues privately to the repository owner instead of
-opening a public issue. Do not include API keys, access tokens, private prompts,
-or conversation content in reports.
+Please use [GitHub private vulnerability reporting](https://github.com/dongbo910220/raycast-deepseek-panel/security/advisories/new)
+instead of opening a public issue. Do not include API keys, access tokens,
+private prompts, or conversation content in reports.
 
 ## Credential handling
 
