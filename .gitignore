@@ -1,0 +1,30 @@
+.DS_Store
+.idea/
+.vscode/
+
+# Dependencies and build output
+node_modules/
+dist/
+*.app/
+*.dmg
+*.zip
+
+# Local Raycast and Swift state
+.raycast/
+.build/
+DerivedData/
+
+# Credentials and signing material
+.env
+.env.*
+!.env.example
+*secret*
+*credential*
+*.pem
+*.p12
+*.mobileprovision
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*

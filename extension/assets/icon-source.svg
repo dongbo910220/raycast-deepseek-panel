@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="DeepSeek Direct icon">
+  <defs>
+    <linearGradient id="background" x1="48" y1="32" x2="464" y2="480" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6157FF"/>
+      <stop offset="1" stop-color="#2166E8"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#background)"/>
+  <path d="M116 150c0-31 25-56 56-56h168c31 0 56 25 56 56v126c0 31-25 56-56 56H236l-76 68 18-68h-6c-31 0-56-25-56-56V150Z" fill="white"/>
+  <path d="M257 136l18 52 52 18-52 18-18 52-18-52-52-18 52-18 18-52Z" fill="#315BEF"/>
+  <circle cx="344" cy="272" r="18" fill="#315BEF"/>
+</svg>

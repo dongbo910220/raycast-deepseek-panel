@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+        with:
+          version: 11.19.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22.22.2
+          cache: pnpm
+          cache-dependency-path: extension/pnpm-lock.yaml
+
+      - name: Install extension dependencies
+        working-directory: extension
+        run: pnpm install --frozen-lockfile
+
+      - name: Build native panel
+        run: DEEPSEEK_DIRECT_DIST_DIR="$GITHUB_WORKSPACE/extension/assets" ./macos-panel/build.zsh
+
+      - name: Verify native panel
+        run: |
+          codesign --verify --deep --strict "extension/assets/DeepSeek Panel.app"
+          test "$(lipo -archs 'extension/assets/DeepSeek Panel.app/Contents/MacOS/DeepSeek Panel')" = "x86_64 arm64" || \
+            test "$(lipo -archs 'extension/assets/DeepSeek Panel.app/Contents/MacOS/DeepSeek Panel')" = "arm64 x86_64"
+          otool -l "extension/assets/DeepSeek Panel.app/Contents/MacOS/DeepSeek Panel" | grep -A4 LC_BUILD_VERSION | grep 'minos 13.0'
+
+      - name: Build Raycast extension
+        working-directory: extension
+        run: pnpm build
+
+      - name: Reject committed credentials
+        shell: bash
+        run: |
+          if git grep -IlE 'sk-[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]+|AKIA[0-9A-Z]{16}' -- . | grep -q .; then
+            echo 'Potential credential found in a tracked file.' >&2
+            exit 1
+          fi

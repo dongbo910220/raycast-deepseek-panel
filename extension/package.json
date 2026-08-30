@@ -1,0 +1,107 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "deepseek-direct",
+  "title": "DeepSeek Direct",
+  "description": "Ask DeepSeek V4 in a persistent native macOS panel with web search",
+  "icon": "extension-icon.png",
+  "author": "dongbo910220",
+  "license": "MIT",
+  "packageManager": "pnpm@11.19.0",
+  "platforms": [
+    "macOS"
+  ],
+  "commands": [
+    {
+      "name": "ask",
+      "title": "Ask DeepSeek",
+      "description": "Open a persistent DeepSeek answer window with web search",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "apiKey",
+      "title": "DeepSeek API Key",
+      "description": "Stored by Raycast as a password preference",
+      "type": "password",
+      "required": true
+    },
+    {
+      "name": "webSearch",
+      "label": "Enable Web Search",
+      "title": "Enable Web Search",
+      "description": "Let DeepSeek search the web whenever current information is needed",
+      "type": "checkbox",
+      "required": false,
+      "default": true
+    },
+    {
+      "name": "reasoningLevel",
+      "title": "Deep Reasoning",
+      "description": "Off is faster; enable a level only when you want extra reasoning",
+      "type": "dropdown",
+      "required": true,
+      "default": "none",
+      "data": [
+        {
+          "title": "Off (Faster)",
+          "value": "none"
+        },
+        {
+          "title": "Low",
+          "value": "low"
+        },
+        {
+          "title": "Medium",
+          "value": "medium"
+        },
+        {
+          "title": "High",
+          "value": "high"
+        },
+        {
+          "title": "Maximum",
+          "value": "max"
+        }
+      ]
+    },
+    {
+      "name": "maxOutputTokens",
+      "title": "Maximum Output Tokens",
+      "description": "Upper limit for a single answer",
+      "type": "textfield",
+      "required": true,
+      "default": "8192"
+    },
+    {
+      "name": "resultWindow",
+      "title": "Answer Window",
+      "description": "The floating window stays visible when you click another app",
+      "type": "dropdown",
+      "required": false,
+      "default": "persistent",
+      "data": [
+        {
+          "title": "Persistent Floating Window (Recommended)",
+          "value": "persistent"
+        },
+        {
+          "title": "Inside Raycast",
+          "value": "raycast"
+        }
+      ]
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^2.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.17",
+    "@types/react": "19.0.10",
+    "typescript": "^6.0.3"
+  },
+  "scripts": {
+    "dev": "ray develop",
+    "build": "ray build -e dist"
+  }
+}
