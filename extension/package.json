@@ -93,7 +93,7 @@
     }
   ],
   "dependencies": {
-    "@raycast/api": "^2.1.2"
+    "@raycast/api": "^2.7.1"
   },
   "devDependencies": {
     "@types/node": "22.19.17",

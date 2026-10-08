@@ -4,13 +4,17 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  brace-expansion@>=2 <3: 2.1.7
+  brace-expansion@>=5 <6: 5.0.12
+
 importers:
 
   .:
     dependencies:
       '@raycast/api':
-        specifier: ^2.1.2
-        version: 2.1.2(@types/node@22.19.17)(@types/react@19.0.10)(supports-color@8.1.1)
+        specifier: ^2.7.1
+        version: 2.7.1(@types/node@22.19.17)(@types/react@19.0.10)(supports-color@8.1.1)
     devDependencies:
       '@types/node':
         specifier: 22.19.17
@@ -330,8 +334,8 @@ packages:
     resolution: {integrity: sha512-GbdWJOmmBO3xmrVjDXeWG7tXl4vzeGZ+af9ztCfAmhOPEkd/+eeAAadzQPeZoygedqCvsdux3QLq9/MAxusPKg==}
     engines: {node: '>=18.0.0'}
 
-  '@raycast/api@2.1.2':
-    resolution: {integrity: sha512-w3mIhaJvzaAk5jt6NdriWmzWIifCTvAfTC9lcCrRfmYtMLazD5SGU17FyiQJs4Y/Veuo/Fej4YjDYj6tjTiT4A==}
+  '@raycast/api@2.7.1':
+    resolution: {integrity: sha512-cgLGKuV99jwo5Hrs22AzqR/aSY4qbsSJE3b0ARREcvFtq+BuSmSjGNx2sx56Fxwf/FqVvtYUXQuqYXwwotB24Q==}
     engines: {node: '>=22.22.2'}
     hasBin: true
     peerDependencies:
@@ -378,11 +382,11 @@ packages:
     resolution: {integrity: sha512-BLrgEcRTwX2o6gGxGOCNyMvGSp35YofuYzw9h1IMTRmKqttAZZVU67bdb9Pr2vUHA8+j3i2tJfjO6C6+4myGTA==}
     engines: {node: 18 || 20 || >=22}
 
-  brace-expansion@2.1.4:
-    resolution: {integrity: sha512-hGfVzPxthbf3+2yjg/RBs60cB0FhqBS/zvdV/4wn4/BmN0bNMMHPc4V/BbFieqf1TKAGGAHnY4eSjajCl0f2Xg==}
+  brace-expansion@2.1.7:
+    resolution: {integrity: sha512-uZbew1NqdmPDTMJ8ah1y+b+9QEJrfkXFk3RcTQw3X0jW/xRUvFKsg1CfQdSYGdTbXZWExtU3J3ccxtnfw1Fi0g==}
 
-  brace-expansion@5.0.9:
-    resolution: {integrity: sha512-ScQ4IuvIEF1TMlP7Zt+vjJ//9zlPb2SDcxWxM3bk8s6t6GGdJ7KO1dCcTidOPJKePW30LE/2cT7wCyPho9/Wxg==}
+  brace-expansion@5.0.12:
+    resolution: {integrity: sha512-YovQ3rzhaLMIrDjNDMkNS01tea93qhEhG5xy8f6+R0l+dw3Ki+5sCoIoI942iuLZTHWogWktgwVDhU09iNEimQ==}
     engines: {node: 20 || >=22}
 
   chardet@2.2.0:
@@ -844,7 +848,7 @@ snapshots:
     transitivePeerDependencies:
       - '@types/node'
 
-  '@raycast/api@2.1.2(@types/node@22.19.17)(@types/react@19.0.10)(supports-color@8.1.1)':
+  '@raycast/api@2.7.1(@types/node@22.19.17)(@types/react@19.0.10)(supports-color@8.1.1)':
     dependencies:
       '@oclif/core': 4.14.0
       '@oclif/plugin-autocomplete': 3.3.0(supports-color@8.1.1)
@@ -884,11 +888,11 @@ snapshots:
 
   balanced-match@4.0.4: {}
 
-  brace-expansion@2.1.4:
+  brace-expansion@2.1.7:
     dependencies:
       balanced-match: 1.0.2
 
-  brace-expansion@5.0.9:
+  brace-expansion@5.0.12:
     dependencies:
       balanced-match: 4.0.4
 
@@ -1001,11 +1005,11 @@ snapshots:
 
   minimatch@10.2.6:
     dependencies:
-      brace-expansion: 5.0.9
+      brace-expansion: 5.0.12
 
   minimatch@5.1.9:
     dependencies:
-      brace-expansion: 2.1.4
+      brace-expansion: 2.1.7
 
   ms@2.1.3: {}
 

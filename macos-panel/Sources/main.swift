@@ -104,6 +104,7 @@ private struct ConversationTurn: Identifiable {
     let id = UUID()
     let question: String
     var answer = ""
+    var renderedAnswer = AttributedString("")
     var citations: [Citation] = []
     var usedWebSearch = false
     var errorMessage = ""
@@ -195,7 +196,10 @@ private struct StreamState {
             }
             answer += delta
             let now = Date()
-            guard now.timeIntervalSince(lastRenderedAt) >= 0.06 else { return [] }
+            // A full answer snapshot is published on every update. Five UI updates
+            // per second keeps streaming responsive without overwhelming SwiftUI
+            // with repeated layout work for long answers.
+            guard now.timeIntervalSince(lastRenderedAt) >= 0.15 else { return [] }
             lastRenderedAt = now
             return [.answer(answer), .status("正在生成回答…")]
 
@@ -528,19 +532,26 @@ private final class PanelModel: ObservableObject {
         guard let index = turns.firstIndex(where: { $0.id == turnID }) else { return }
         switch update {
         case let .status(value):
-            status = value
+            if status != value {
+                status = value
+            }
         case let .answer(value):
-            turns[index].answer = value
-            turns[index].errorMessage = ""
-            scrollRevision += 1
+            if turns[index].answer != value || !turns[index].errorMessage.isEmpty {
+                turns[index].answer = value
+                turns[index].errorMessage = ""
+                scrollRevision += 1
+            }
         case .usedWebSearch:
-            turns[index].usedWebSearch = true
+            if !turns[index].usedWebSearch {
+                turns[index].usedWebSearch = true
+            }
         }
     }
 
     func complete(_ result: FinalAnswer, turnID: UUID) {
         guard let index = turns.firstIndex(where: { $0.id == turnID }) else { return }
         turns[index].answer = result.text
+        turns[index].renderedAnswer = Self.markdown(result.text)
         turns[index].citations = result.citations
         turns[index].usedWebSearch = result.usedWebSearch
         turns[index].errorMessage = ""
@@ -557,6 +568,7 @@ private final class PanelModel: ObservableObject {
         }
         let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         turns[index].errorMessage = message
+        turns[index].renderedAnswer = Self.markdown("> 请求失败：\(message)")
         status = "请求失败"
         isLoading = false
         scrollRevision += 1
@@ -566,7 +578,14 @@ private final class PanelModel: ObservableObject {
         guard canSubmit else { return }
         let question = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         draft = ""
-        onSubmit?(question)
+        let submit = onSubmit
+
+        // Return is delivered from AppKit's field editor. Starting the request
+        // synchronously here changes the text field state while that key event
+        // is still unwinding, which can trap SwiftUI/AppKit in a responder loop.
+        DispatchQueue.main.async {
+            submit?(question)
+        }
     }
 
     func copyAnswer() {
@@ -582,25 +601,24 @@ private final class PanelModel: ObservableObject {
     }
 
     func renderedAnswer(for turn: ConversationTurn) -> AttributedString {
-        let isCurrent = turn.id == turns.last?.id
-        let raw: String
-        if !turn.errorMessage.isEmpty {
-            raw = "> 请求失败：\(turn.errorMessage)"
-        } else if !turn.answer.isEmpty {
-            raw = turn.answer
-        } else if isCurrent {
-            raw = status
-        } else {
-            raw = ""
+        if isLoading, turn.id == turns.last?.id {
+            // Parsing Markdown in the SwiftUI body for every streaming chunk made
+            // long answers progressively more expensive. Stream as plain text and
+            // switch to the cached, parsed value once the turn completes.
+            return AttributedString(turn.answer.isEmpty ? status : turn.answer)
         }
-        return (try? AttributedString(markdown: raw, options: .init(interpretedSyntax: .full)))
+
+        return turn.renderedAnswer
+    }
+
+    private static func markdown(_ raw: String) -> AttributedString {
+        (try? AttributedString(markdown: raw, options: .init(interpretedSyntax: .full)))
             ?? AttributedString(raw)
     }
 }
 
 private struct PanelContentView: View {
     @ObservedObject var model: PanelModel
-    @FocusState private var composerFocused: Bool
 
     private let bottomAnchor = "conversation-bottom"
 
@@ -707,8 +725,9 @@ private struct PanelContentView: View {
                     .padding(20)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .onChange(of: model.scrollRevision) { _ in
+                .onChange(of: model.scrollRevision) { revision in
                     DispatchQueue.main.async {
+                        guard revision == model.scrollRevision else { return }
                         proxy.scrollTo(bottomAnchor, anchor: .bottom)
                     }
                 }
@@ -747,11 +766,13 @@ private struct PanelContentView: View {
                     )
                     .textFieldStyle(.roundedBorder)
                     .font(.system(size: 17))
-                    .focused($composerFocused)
                     .onSubmit {
                         model.submitDraft()
                     }
-                    .disabled(!model.isReady || model.isLoading)
+                    // Keep the field enabled while a request is running. Disabling
+                    // a focused NSTextField during its Return-key callback causes
+                    // a give-up/select-first-responder loop on macOS.
+                    .disabled(!model.isReady)
 
                     Button {
                         model.submitDraft()
@@ -769,37 +790,18 @@ private struct PanelContentView: View {
             .background(.bar)
         }
         .frame(minWidth: 520, minHeight: 360)
-        .onChange(of: model.isLoading) { loading in
-            if !loading && model.isReady {
-                DispatchQueue.main.async {
-                    composerFocused = true
-                }
-            }
-        }
     }
 }
 
 private final class PersistentPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
-
-    override func cancelOperation(_ sender: Any?) {
-        close()
-    }
-
-    override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if event.type == .keyDown, event.keyCode == 53 {
-            close()
-            return true
-        }
-        return super.performKeyEquivalent(with: event)
-    }
 }
 
-private struct StoredConversationTurn {
+private struct StoredConversationTurn: Sendable {
     let user: ConversationInputMessage
     let assistantText: String
-    let outputJSON: Data
+    let outputJSON: Data?
 }
 
 private struct PendingQuery: Sendable {
@@ -817,11 +819,14 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
     private var escapeMonitor: Any?
     private var configuration: QueryInput?
     private var committedHistory: [StoredConversationTurn] = []
+    private var isClosing = false
+    private var didCleanUp = false
 
     private let maximumHistoryBytes = 1_500_000
     private let maximumHistoryTurns = 8
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        guard claimNewestInstance() else { return }
         NSApp.setActivationPolicy(.accessory)
 
         let panel = PersistentPanel(
@@ -852,12 +857,10 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         }
 
         self.panel = panel
-        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak panel] event in
-            if event.keyCode == 53 {
-                panel?.close()
-                return nil
-            }
-            return event
+        escapeMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.keyCode == 53 else { return event }
+            self?.requestClose()
+            return nil
         }
 
         panel.makeKeyAndOrderFront(nil)
@@ -866,12 +869,73 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
     }
 
     func windowWillClose(_ notification: Notification) {
+        cleanUp()
+        DispatchQueue.main.async {
+            NSApp.terminate(nil)
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        cleanUp()
+    }
+
+    // Do not use applicationShouldTerminateAfterLastWindowClosed here. The text
+    // input system creates transient windows in this process, while NSPanel does
+    // not count as a normal app window; closing an IME cursor window can otherwise
+    // terminate the whole panel immediately after a follow-up is submitted.
+
+    private func requestClose() {
+        guard !isClosing else { return }
+        isClosing = true
+        DispatchQueue.main.async { [weak self] in
+            self?.panel?.close()
+        }
+    }
+
+    private func cleanUp() {
+        guard !didCleanUp else { return }
+        didCleanUp = true
         queryTask?.cancel()
+        queryTask = nil
         if let escapeMonitor {
             NSEvent.removeMonitor(escapeMonitor)
             self.escapeMonitor = nil
         }
-        NSApp.terminate(nil)
+    }
+
+    private func claimNewestInstance() -> Bool {
+        guard let bundleIdentifier = Bundle.main.bundleIdentifier else { return true }
+        let current = NSRunningApplication.current
+        let peers = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier)
+            .filter { $0.processIdentifier != current.processIdentifier && !$0.isTerminated }
+
+        // Raycast starts the helper executable directly. If launches overlap, use
+        // a deterministic latest-wins rule so both processes cannot kill each other.
+        if peers.contains(where: { launchedLater($0, than: current) }) {
+            DispatchQueue.main.async {
+                NSApp.terminate(nil)
+            }
+            return false
+        }
+
+        for peer in peers {
+            _ = peer.terminate()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                if !peer.isTerminated {
+                    _ = peer.forceTerminate()
+                }
+            }
+        }
+        return true
+    }
+
+    private func launchedLater(_ lhs: NSRunningApplication, than rhs: NSRunningApplication) -> Bool {
+        if let lhsDate = lhs.launchDate,
+           let rhsDate = rhs.launchDate,
+           lhsDate != rhsDate {
+            return lhsDate > rhsDate
+        }
+        return lhs.processIdentifier > rhs.processIdentifier
     }
 
     private func position(_ panel: NSPanel) {
@@ -933,7 +997,18 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
 
     private func performQuery(_ pendingQuery: PendingQuery) async {
         do {
-            let conversationJSON = try makeConversationJSON(currentUser: pendingQuery.user)
+            let historySnapshot = committedHistory
+            let historyByteLimit = maximumHistoryBytes
+            let historyTurnLimit = maximumHistoryTurns
+            let currentUser = pendingQuery.user
+            let conversationJSON = try await Task.detached(priority: .userInitiated) {
+                try Self.makeConversationJSON(
+                    history: historySnapshot,
+                    currentUser: currentUser,
+                    maximumHistoryBytes: historyByteLimit,
+                    maximumHistoryTurns: historyTurnLimit
+                )
+            }.value
             let panelModel = model
             let turnID = pendingQuery.turnID
             let result = try await client.ask(
@@ -949,9 +1024,14 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
                 StoredConversationTurn(
                     user: pendingQuery.user,
                     assistantText: result.text,
-                    outputJSON: result.historyOutputJSON
+                    outputJSON: result.historyOutputJSON.count <= maximumHistoryBytes
+                        ? result.historyOutputJSON
+                        : nil
                 )
             )
+            if committedHistory.count > maximumHistoryTurns {
+                committedHistory.removeFirst(committedHistory.count - maximumHistoryTurns)
+            }
             model.complete(result, turnID: turnID)
         } catch is CancellationError {
             // Closing the panel intentionally cancels the in-flight request.
@@ -960,16 +1040,21 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         }
     }
 
-    private func makeConversationJSON(currentUser: ConversationInputMessage) throws -> Data {
+    nonisolated private static func makeConversationJSON(
+        history: [StoredConversationTurn],
+        currentUser: ConversationInputMessage,
+        maximumHistoryBytes: Int,
+        maximumHistoryTurns: Int
+    ) throws -> Data {
         var selected: [(turn: StoredConversationTurn, useRawOutput: Bool)] = []
         var byteCount = currentUser.content.utf8.count
 
-        for turn in committedHistory.reversed().prefix(maximumHistoryTurns) {
+        for turn in history.reversed().prefix(maximumHistoryTurns) {
             let userBytes = turn.user.content.utf8.count
-            let rawBytes = turn.outputJSON.count
-            if byteCount + userBytes + rawBytes <= maximumHistoryBytes {
+            if let outputJSON = turn.outputJSON,
+               byteCount + userBytes + outputJSON.count <= maximumHistoryBytes {
                 selected.append((turn, true))
-                byteCount += userBytes + rawBytes
+                byteCount += userBytes + outputJSON.count
                 continue
             }
 
@@ -986,7 +1071,8 @@ private final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelega
         for selectedTurn in selected.reversed() {
             items.append(selectedTurn.turn.user.apiValue)
             if selectedTurn.useRawOutput,
-               let output = try JSONSerialization.jsonObject(with: selectedTurn.turn.outputJSON) as? [Any] {
+               let outputJSON = selectedTurn.turn.outputJSON,
+               let output = try JSONSerialization.jsonObject(with: outputJSON) as? [Any] {
                 items.append(contentsOf: output)
             } else {
                 items.append(
